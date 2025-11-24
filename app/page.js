@@ -18,76 +18,64 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
 
-  async function handleClick() {
-    try {
-      setLoading(true);
-      setMsg("Criando pedido...");
-      setPreviewUrl("");
+ async function createOrder() {
+  try {
+    setLoading(true);
+    setMsg("");
 
-      // 1) cria o pedido no banco (orders)
-      const resOrder = await fetch("/api/create-order", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(form),
-      });
+    // 1) Cria o pedido
+    const res = await fetch("/api/create-order", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const json = await res.json();
 
-      const jsonOrder = await resOrder.json();
-
-      if (!resOrder.ok) {
-        console.error(jsonOrder);
-        setMsg("Erro ao criar pedido.");
-        setLoading(false);
-        return;
-      }
-
-      const orderId = jsonOrder.order.id;
-      const previewToken = jsonOrder.previewToken;
-
-      setMsg("Gerando textos com IA...");
-
-      // 2) gera os textos com IA
-      const resTexts = await fetch("/api/generate-texts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orderId }),
-      });
-
-      const jsonTexts = await resTexts.json();
-      if (!resTexts.ok) {
-        console.error(jsonTexts);
-        setMsg("Erro ao gerar textos.");
-        setLoading(false);
-        return;
-      }
-
-      setMsg("Montando layout do site...");
-
-      // 3) gera o layout HTML
-      const resLayout = await fetch("/api/generate-layout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orderId }),
-      });
-
-      const jsonLayout = await resLayout.json();
-      if (!resLayout.ok) {
-        console.error(jsonLayout);
-        setMsg("Erro ao gerar layout.");
-        setLoading(false);
-        return;
-      }
-
-      // 4) monta o link de preview (mesmo domínio)
-      const url = `/preview/${orderId}?token=${previewToken}`;
-      setPreviewUrl(url);
-      setMsg("Site gerado com sucesso! Veja o preview abaixo 👇");
-    } catch (e) {
-      console.error(e);
-      setMsg("Erro inesperado ao gerar o site.");
-    } finally {
+    if (!res.ok) {
       setLoading(false);
+      setMsg("Erro ao criar pedido: " + (json.error || JSON.stringify(json)));
+      return;
     }
+
+    const orderId = json.order.id;
+
+    // 2) Gera textos
+    const resTexts = await fetch("/api/generate-texts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ orderId }),
+    });
+    const jsonTexts = await resTexts.json();
+
+    if (!resTexts.ok) {
+      setLoading(false);
+      setMsg("Pedido criado, mas erro ao gerar textos: " + (jsonTexts.error || JSON.stringify(jsonTexts)));
+      return;
+    }
+
+    // 3) Gera layout
+    const resLayout = await fetch("/api/generate-layout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ orderId }),
+    });
+    const jsonLayout = await resLayout.json();
+
+    if (!resLayout.ok) {
+      setLoading(false);
+      setMsg("Textos gerados, mas erro ao gerar layout: " + (jsonLayout.error || JSON.stringify(jsonLayout)));
+      return;
+    }
+
+    setLoading(false);
+    setMsg("Seu site foi gerado com sucesso! ID do pedido: " + orderId);
+  } catch (e) {
+    console.error(e);
+    setLoading(false);
+    setMsg("Erro inesperado: " + e.message);
   }
+}
+
 
   return (
     <div style={{ fontFamily: "Arial, sans-serif" }}>
