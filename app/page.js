@@ -13,26 +13,77 @@ export default function Page() {
     plan: "express",
     publishOption: "subdomain"
   });
+
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
 
-  async function createOrder() {
-    setLoading(true);
-    setMsg("");
+  async function handleClick() {
     try {
-      const res = await fetch("/api/create-order", {
+      setLoading(true);
+      setMsg("Criando pedido...");
+      setPreviewUrl("");
+
+      // 1) cria o pedido no banco (orders)
+      const resOrder = await fetch("/api/create-order", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(form)
+        body: JSON.stringify(form),
       });
-      const json = await res.json();
-      if (!res.ok) {
-        setMsg("Erro: " + (json.error || "não foi possível gerar o site"));
-      } else {
-        setMsg("Site gerado! Acesse: " + json.previewUrl);
+
+      const jsonOrder = await resOrder.json();
+
+      if (!resOrder.ok) {
+        console.error(jsonOrder);
+        setMsg("Erro ao criar pedido.");
+        setLoading(false);
+        return;
       }
+
+      const orderId = jsonOrder.order.id;
+      const previewToken = jsonOrder.previewToken;
+
+      setMsg("Gerando textos com IA...");
+
+      // 2) gera os textos com IA
+      const resTexts = await fetch("/api/generate-texts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+
+      const jsonTexts = await resTexts.json();
+      if (!resTexts.ok) {
+        console.error(jsonTexts);
+        setMsg("Erro ao gerar textos.");
+        setLoading(false);
+        return;
+      }
+
+      setMsg("Montando layout do site...");
+
+      // 3) gera o layout HTML
+      const resLayout = await fetch("/api/generate-layout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+
+      const jsonLayout = await resLayout.json();
+      if (!resLayout.ok) {
+        console.error(jsonLayout);
+        setMsg("Erro ao gerar layout.");
+        setLoading(false);
+        return;
+      }
+
+      // 4) monta o link de preview (mesmo domínio)
+      const url = `/preview/${orderId}?token=${previewToken}`;
+      setPreviewUrl(url);
+      setMsg("Site gerado com sucesso! Veja o preview abaixo 👇");
     } catch (e) {
-      setMsg("Erro inesperado ao criar o site.");
+      console.error(e);
+      setMsg("Erro inesperado ao gerar o site.");
     } finally {
       setLoading(false);
     }
@@ -80,16 +131,28 @@ export default function Page() {
         />
 
         <button
-          onClick={createOrder}
+          onClick={handleClick}
           disabled={loading}
-          style={{ padding: "10px 18px", background: "#0A84FF", color: "#fff", border: "none", borderRadius: 6 }}
+          style={{
+            padding: "10px 18px",
+            background: "#0A84FF",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            cursor: loading ? "default" : "pointer"
+          }}
         >
-          {loading ? "Gerando site..." : "Quero meu site agora"}
+          {loading ? "Gerando seu site..." : "Quero meu site agora"}
         </button>
 
-        {msg && (
-          <p style={{ marginTop: 12, wordBreak: "break-all" }}>
-            {msg}
+        {msg && <p style={{ marginTop: 16 }}>{msg}</p>}
+
+        {previewUrl && (
+          <p style={{ marginTop: 12 }}>
+            Preview:{" "}
+            <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+              abrir site gerado
+            </a>
           </p>
         )}
       </main>
