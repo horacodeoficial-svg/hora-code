@@ -1,24 +1,31 @@
-import { createClient } from '@supabase/supabase-js';
-import jwt from 'jsonwebtoken';
+"use client";
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+import { useEffect, useState } from "react";
 
-export async function generateMetadata() {
-  return { title: 'Preview - HORA CODE' };
-}
+export default function PreviewPage({ params }) {
+  const { id } = params;
+  const [html, setHtml] = useState(null);
+  const [error, setError] = useState("");
 
-export default async function PreviewPage({ params, searchParams }) {
-  const token = searchParams.token;
-  if (!token) {
-    return <div>Token missing</div>;
-  }
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.orderId !== params.id) return <div>Invalid token</div>;
-    const { data: layout } = await supabase.from('layouts').select('*').eq('order_id', params.id).single();
-    if (!layout) return <div>Layout not found</div>;
-    return <div dangerouslySetInnerHTML={{ __html: layout.html_content }} />;
-  } catch (e) {
-    return <div>Invalid or expired token</div>;
-  }
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`/api/layout-by-order?orderId=${id}`);
+        const json = await res.json();
+        if (!res.ok) {
+          setError(json.error || "Erro ao carregar preview");
+          return;
+        }
+        setHtml(json.html);
+      } catch (e) {
+        setError(e.message || "Erro ao carregar preview");
+      }
+    }
+    load();
+  }, [id]);
+
+  if (error) return <div>Erro: {error}</div>;
+  if (!html) return <div>Carregando preview...</div>;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
